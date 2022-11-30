@@ -30,7 +30,7 @@ using namespace rp::standalone::rplidar;
 
 class System {
     public:
-        System::System(std::string input_path, std::string lidar_path, std::string arduino_path);
+        System(std::string input_path, std::string lidar_path, std::string arduino_path);
         void startProgram();
         void printSystemInfo();
 

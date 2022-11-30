@@ -8,6 +8,7 @@ project(Auto)
 
 add_subdirectory(lib)
 find_package(OpenCV REQUIRED)
+find_package(PCL REQUIRED)
 
 include_directories(
     ${OpenCV_INCLUDE_DIRS} 
@@ -18,7 +19,12 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/lib/sdk/include
     ${CMAKE_SOURCE_DIR}/lib/sdk/src
     ${CMAKE_SOURCE_DIR}/lib/sdk/src/hal
+
+    # PCL LIB
+    ${PCL_INCLUDE_DIRS}
 )
+
+
 
 if ( APPLE )
     message("Your OS is MaxOS")
@@ -28,18 +34,22 @@ elseif ( UNIX )
     include_directories(${CMAKE_SOURCE_DIR}/lib/sdk/src/linux)
 endif()
 
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+
 add_executable(${PROJECT_NAME} 
     src/main.cpp
-    # src/Control.cpp
-    # src/DogStatus.cpp
-    # src/System.cpp
-    # src/Lidar.cpp
+    src/Control.cpp
+    src/DogStatus.cpp
+    src/System.cpp
+    src/Lidar.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} 
     ${OpenCV_LIBS} 
     SDK_LIBRARY
     -lpthread
+    ${PCL_LIBRARIES}
 )
 
 

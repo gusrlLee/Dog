@@ -52,7 +52,7 @@ System::System(std::string input_path, std::string lidar_path, std::string ardui
         camera_capture_thread = std::thread(&System::cameraCaptureThread, m_input_path, m_dog_status);
 
     if ( is_use_arduino ) 
-        control_thread = std::thread(&System::controlThread, m_dog_status);
+        control_thread = std::thread(&System::controlThread, m_control,m_dog_status);
 }
 
 void System::printSystemInfo() {
@@ -129,7 +129,7 @@ void System::cameraCaptureThread(std::string input_path, std::shared_ptr<DogStat
         if (current_frame.empty()) {
             continue;
         }
-        cv::flip(current_frame, current_frame, 1);
+        cv::flip(current_frame, current_frame, 0);
 
         dog_status->setCurrentFrame(current_frame);
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
