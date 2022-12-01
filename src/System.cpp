@@ -314,7 +314,7 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
     bool is_safe_left = true;
     bool is_safe_right = true;
     
-    const float object_collision_distance_threshold = 300;
+    const float object_collision_distance_threshold = 350;
 
     while (1) {
         if (!dog_status->getSystemStatus()) {
@@ -419,11 +419,11 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
         max_left_object_distance = 0;
         max_right_object_distance = 0;
 
-        // status = control->sendToCommand(command);     
+        status = control->sendToCommand(command);     
 
-        // if (!status) {
-        //     continue;
-        // }
+        if (!status) {
+            continue;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
     }
 }
