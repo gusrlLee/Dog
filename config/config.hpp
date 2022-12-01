@@ -4,9 +4,9 @@
 // for LiDAR 
 #define LIDAR_BAUDRATE 115200
 #define MAP_PIXEL_RATIO 0.05
-#define LIDAR_PIXEL_RATIO 0.05
+#define LIDAR_PIXEL_RATIO 0.1
 #define LIDAR_MAX_DISTANCE 1500
-#define COLLISION_DISTANCE_THRESHOLD 350
+#define COLLISION_DISTANCE_THRESHOLD 250
 
 #define _countof( _Array ) (int)(sizeof(_Array) / sizeof(_Array[0]))
 

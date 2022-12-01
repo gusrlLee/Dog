@@ -2,6 +2,7 @@
 
 DogStatus::DogStatus() {
     is_working = false;
+    m_current_location = cv::Point2f(500, 500);
 }
 
 // =============================================================================

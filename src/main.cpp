@@ -38,19 +38,23 @@ int main(int argc, char* argv[]) {
         help();
         return -1;
     }
+    if ( parser.has("help")) {
+        help();
+        return 0;
+    }
 
     std::string input_path = parser.get<std::string>("input-path");
     std::string lidar_path = parser.get<std::string>("lidar-path");
     std::string arduino_path = parser.get<std::string>("arduino-path");
 
-    std::cout << "input path " << input_path << std::endl;
     if ( lidar_path.empty() ) {
         std::cout << "[ERROR]" << std::endl;
         std::cout << "Our System need to LiDAR!, Check Your LiDAR." << std::endl;
         return -1;
     }
     else {
-
+        System* system = new System(input_path, lidar_path, arduino_path);
+        system->startProgram();
     }
 
     return 0;

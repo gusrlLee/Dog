@@ -1,4 +1,5 @@
 #include "System.hpp"
+#include <ctime>
 
 using namespace rp::standalone::rplidar;
 
@@ -84,6 +85,7 @@ void System::startProgram() {
     float theta = 0;
     float object_distance = 0;
     cv::Point center = cv::Point(500, 500);
+    float rotate = 90;
 
     while (1) {
         if (!m_dog_status->getSystemStatus()) {
@@ -91,7 +93,7 @@ void System::startProgram() {
             break;
         }
         // init display
-        cv::Mat lidar_display = cv::Mat::zeros(cv::Size(500, 500), CV_8UC3);
+        cv::Mat lidar_display = cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3);
         cv::Mat map_display = cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3);
 
         // get dataset
@@ -101,7 +103,7 @@ void System::startProgram() {
 
         size_t count = current_scan_data.size();
 
-        cv::circle(map_display, cv::Point((int)current_location.x, (int)current_location.y), 5, (0, 0, 255), -1, cv::FILLED);
+        cv::circle(map_display, cv::Point((int)current_location.x, (int)current_location.y), 5, (255, 0, 0), 5, cv::FILLED);
 
         for (int pos = 0; pos < (int)count; ++pos) {
             theta = current_scan_data[pos].angle_z_q14 * 90.f / 16384.f;
@@ -111,37 +113,43 @@ void System::startProgram() {
                 if (object_distance < LIDAR_MAX_DISTANCE) {
                     int x = object_distance * cos(theta * (CV_PI/180));
                     int y = object_distance * sin(theta * (CV_PI/180));
+                    float rx = x * cos(rotate * (CV_PI/180)) - y * sin(rotate * (CV_PI/180));
+                    float ry = x * sin(rotate * (CV_PI/180)) + y * cos(rotate * (CV_PI/180));
+
                     // for map 
-                    int xx = x * MAP_PIXEL_RATIO;
-                    int yy = y * MAP_PIXEL_RATIO;
-                    cv::circle(map_display, cv::Point(xx + center.x, yy + center.y), 1, cv::Scalar(255, 0, 0), -1, cv::FILLED);
+                    int xx = rx * MAP_PIXEL_RATIO;
+                    int yy = ry * MAP_PIXEL_RATIO;
+                    cv::circle(map_display, cv::Point(xx + current_location.x, yy + current_location.y), 1, cv::Scalar(0, 0, 255), 1, cv::FILLED);
 
                     // for lidar 
-                    xx = x * LIDAR_PIXEL_RATIO;
-                    yy = y * LIDAR_PIXEL_RATIO;
-                    cv::circle(lidar_display, cv::Point(xx + current_location.x, yy + current_location.y), -1, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-                    cv::line(lidar_display, cv::Point(current_location.x, current_location.y), cv::Point(xx + current_location.x, yy + current_location.y), cv::Scalar(100, 100, 100), 1, cv::LINE_AA);
+                    xx = rx * LIDAR_PIXEL_RATIO;
+                    yy = ry * LIDAR_PIXEL_RATIO;
+                    cv::circle(lidar_display, cv::Point(xx + center.x, yy + center.y), 1, cv::Scalar(0, 0, 255), 1, cv::FILLED);
+                    cv::line(lidar_display, cv::Point(center.x, center.y), cv::Point(xx + center.x, yy + center.y), cv::Scalar(100, 100, 100), 1, cv::LINE_AA);
                     
                 }  
 
                 else {
                     int x = LIDAR_MAX_DISTANCE * cos(theta * (CV_PI/180)); 
                     int y = LIDAR_MAX_DISTANCE * sin(theta * (CV_PI/180));
+                    float rx = x * cos(rotate * (CV_PI/180)) - y * sin(rotate * (CV_PI/180));
+                    float ry = x * sin(rotate * (CV_PI/180)) + y * cos(rotate * (CV_PI/180));
+
                     // for map 
-                    int xx = x * MAP_PIXEL_RATIO;
-                    int yy = y * MAP_PIXEL_RATIO;
-                    cv::circle(map_display, cv::Point(xx + current_location.x, yy + current_location.y), 1, cv::Scalar(255, 0, 0), -1, cv::FILLED);
+                    int xx = rx * MAP_PIXEL_RATIO;
+                    int yy = ry * MAP_PIXEL_RATIO;
+                    cv::circle(map_display, cv::Point(xx + current_location.x, yy + current_location.y), 1, cv::Scalar(0, 0, 255), 1, cv::FILLED);
 
                     // for lidar 
-                    xx = x * LIDAR_PIXEL_RATIO;
-                    yy = y * LIDAR_PIXEL_RATIO;
-                    cv::circle(lidar_display, cv::Point(xx + center.x, yy + center.y), -1, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                    xx = rx * LIDAR_PIXEL_RATIO;
+                    yy = ry * LIDAR_PIXEL_RATIO;
+                    cv::circle(lidar_display, cv::Point(xx + center.x, yy + center.y), 1, cv::Scalar(0, 0, 255), 1, cv::FILLED);
                     cv::line(lidar_display, cv::Point(center.x, center.y), cv::Point(xx + center.x, yy + center.y), cv::Scalar(100, 100, 100), 1, cv::LINE_AA);
                 }
             }
         }
+        // cv::flip(map_display, map_display, 1);
 
-        cv::flip(map_display, map_display, 1);
 
         // display
         cv::imshow("LIDAR", lidar_display);
@@ -200,6 +208,7 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
     std::vector<cv::Point2f> curr_scan_data;
     cv::Point2f current_location = cv::Point2f(500, 500);
     bool is_ready = false;
+    float rotate = 90;
 
     while (1) {
         if (!dog_status->getSystemStatus()) {
@@ -214,15 +223,22 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
         dog_status->setScanData(current_scan_data, count);
         
         int t=0;
-        if ( !is_ready ) {
+        if ( is_ready == false ) {
             prev_scan_data.clear();
             for (int i=0; i<current_scan_data.size(); i++) {
                 float theta = current_scan_data[i].angle_z_q14 * 90.f / 16384.f; 
                 float object_distance = current_scan_data[i].dist_mm_q2 / 4.0f;
-                cv::Point2f point;
-                point.x = object_distance * cos(theta * (CV_PI/180)) + 500;
-                point.y = object_distance * sin(theta * (CV_PI/180)) + 500;
-                prev_scan_data.push_back( point );
+
+                if (object_distance > 0) {
+                    float x=0;
+                    float y=0;
+                    cv::Point2f point;
+                    x = object_distance * cos(theta * (CV_PI/180)) + 500;
+                    y = object_distance * sin(theta * (CV_PI/180)) + 500;
+                    point.x = x * cos(rotate * (CV_PI/180)) - y * sin(rotate * (CV_PI/180));
+                    point.y = x * sin(rotate * (CV_PI/180)) + y * cos(rotate * (CV_PI/180));
+                    prev_scan_data.push_back( point );
+                }
             }
             is_ready = true;
             continue;
@@ -237,10 +253,14 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             for (int i=0; i<current_scan_data.size(); i++) {
                 float theta = current_scan_data[i].angle_z_q14 * 90.f / 16384.f; 
                 float object_distance = current_scan_data[i].dist_mm_q2 / 4.0f;
-                cv::Point2f point;
-                point.x = object_distance * cos(theta * (CV_PI/180)) + 500;
-                point.y = object_distance * sin(theta * (CV_PI/180)) + 500;
-                curr_scan_data.push_back( point );
+                if (object_distance > 0) {
+                    cv::Point2f point;
+                    float x = object_distance * cos(theta * (CV_PI/180)) + 500;
+                    float y = object_distance * sin(theta * (CV_PI/180)) + 500;
+                    point.x = x * cos(rotate * (CV_PI/180)) - y * sin(rotate * (CV_PI/180));
+                    point.y = x * sin(rotate * (CV_PI/180)) + y * cos(rotate * (CV_PI/180));
+                    curr_scan_data.push_back( point );
+                }
             }
 
             int i = 0;
@@ -262,15 +282,16 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
 
             // icp algorithm
             pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+            icp.setMaximumIterations( 11 );
             icp.setInputSource(prev_scan_point_cloud);
             icp.setInputTarget(current_scan_point_cloud);
-            icp.setMaximumIterations( 13 );
             pcl::PointCloud<pcl::PointXYZ> final;
             icp.align(final);
+            icp.setMaximumIterations (1);
             Eigen::Matrix4f transformation_matrix = icp.getFinalTransformation();
             
             // for debug 
-            std::cout << "transformation_matrix = " << transformation_matrix << std::endl; 
+            // std::cout << "transformation_matrix = " << transformation_matrix << std::endl; 
             current_location.x = current_location.x * transformation_matrix(0, 0) + current_location.y * transformation_matrix(0, 1) + transformation_matrix(0, 3);
             current_location.y = current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) + transformation_matrix(1, 3);
 
@@ -282,7 +303,7 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
 }
 
@@ -293,7 +314,7 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
     bool is_safe_left = true;
     bool is_safe_right = true;
     
-    // const float object_collision_distance_threshold = 600;
+    const float object_collision_distance_threshold = 300;
 
     while (1) {
         if (!dog_status->getSystemStatus()) {
@@ -322,15 +343,15 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
         
         for (int i=0; i<current_scan_data.size(); i++) {
             float theta = current_scan_data[i].angle_z_q14 * 90.f / 16384.f; 
-
             // because, our range is 90 ~ 270
             if ( theta < 90) continue;
             if ( theta > 270) break;
 
             // object distance 
             float object_distance = current_scan_data[i].dist_mm_q2 / 4.0f;
+
             if (theta < 135) { // check colision warning
-                if (object_distance != 0 && object_distance < COLLISION_DISTANCE_THRESHOLD) {
+                if (object_distance != 0 && object_distance < object_collision_distance_threshold) {
                     is_safe_left = false;
                     if (max_left_object_distance < object_distance) {
                         max_left_object_distance = object_distance;
@@ -338,17 +359,17 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
                 }
             }
             else if (theta < 180) { // check colision warning
-                if (object_distance != 0 && object_distance < COLLISION_DISTANCE_THRESHOLD) {
+                if (object_distance != 0 && object_distance < object_collision_distance_threshold) {
                     is_in_dangerzone = true;
                 }
             }
             else if (theta < 225) { // check colision warning
-                if (object_distance != 0 && object_distance < COLLISION_DISTANCE_THRESHOLD) {
+                if (object_distance != 0 && object_distance < object_collision_distance_threshold) {
                     is_in_dangerzone = true;
                 }
             }
             else if (theta < 270) { // check colision warning
-                if (object_distance != 0 && object_distance < COLLISION_DISTANCE_THRESHOLD) {
+                if (object_distance != 0 && object_distance < object_collision_distance_threshold) {
                     is_safe_right = false;
                     if (max_right_object_distance < object_distance) {
                         max_right_object_distance = object_distance;
@@ -379,25 +400,30 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
                 }
             }
         } 
+        else {
+            command = GO_FORWARD;
+        }
 
         // for Debug 
         // printf("[Debug] Is in Dangerzone : %s\n", is_in_dangerzone ? "Yes!" : "No!");
         // printf("[Debug] Safe Left : %s\n", is_safe_left ? "Yes!" : "No!");
         // printf("[Debug] Safe Right : %s\n", is_safe_right ? "Yes!" : "No!");
         // printf("[Debug] Command : %c\n", command);
+        // printf("============================================================================\n");
 
         // init flag 
-        bool is_in_dangerzone = false;
-        bool is_safe_left = true;
-        bool is_safe_right = true;
+        is_in_dangerzone = false;
+        is_safe_left = true;
+        is_safe_right = true;
+
         max_left_object_distance = 0;
         max_right_object_distance = 0;
 
-        status = control->sendToCommand(command);     
+        // status = control->sendToCommand(command);     
 
-        if (!status) {
-            continue;
-        }
+        // if (!status) {
+        //     continue;
+        // }
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
     }
 }
