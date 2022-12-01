@@ -83,21 +83,79 @@ void System::startProgram() {
 
     float theta = 0;
     float object_distance = 0;
+    cv::Point center = cv::Point(500, 500);
 
     while (1) {
         if (!m_dog_status->getSystemStatus()) {
             printf("[EXIT]\n");
             break;
         }
+        // init display
+        cv::Mat lidar_display = cv::Mat::zeros(cv::Size(500, 500), CV_8UC3);
+        cv::Mat map_display = cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3);
 
-        // get scan data
+        // get dataset
         std::vector<sl_lidar_response_measurement_node_hq_t> current_scan_data;
         current_scan_data = m_dog_status->getScanData();
+        cv::Point2f current_location = m_dog_status->getCurrentLocation();
 
         size_t count = current_scan_data.size();
+
+        cv::circle(map_display, cv::Point((int)current_location.x, (int)current_location.y), 5, (0, 0, 255), -1, cv::FILLED);
+
         for (int pos = 0; pos < (int)count; ++pos) {
             theta = current_scan_data[pos].angle_z_q14 * 90.f / 16384.f;
             object_distance = current_scan_data[pos].dist_mm_q2 / 4.0f;
+
+            if (object_distance > 0) {
+                if (object_distance < LIDAR_MAX_DISTANCE) {
+                    int x = object_distance * cos(theta * (CV_PI/180));
+                    int y = object_distance * sin(theta * (CV_PI/180));
+                    // for map 
+                    int xx = x * MAP_PIXEL_RATIO;
+                    int yy = y * MAP_PIXEL_RATIO;
+                    cv::circle(map_display, cv::Point(xx + center.x, yy + center.y), 1, cv::Scalar(255, 0, 0), -1, cv::FILLED);
+
+                    // for lidar 
+                    xx = x * LIDAR_PIXEL_RATIO;
+                    yy = y * LIDAR_PIXEL_RATIO;
+                    cv::circle(lidar_display, cv::Point(xx + current_location.x, yy + current_location.y), -1, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                    cv::line(lidar_display, cv::Point(current_location.x, current_location.y), cv::Point(xx + current_location.x, yy + current_location.y), cv::Scalar(100, 100, 100), 1, cv::LINE_AA);
+                    
+                }  
+
+                else {
+                    int x = LIDAR_MAX_DISTANCE * cos(theta * (CV_PI/180)); 
+                    int y = LIDAR_MAX_DISTANCE * sin(theta * (CV_PI/180));
+                    // for map 
+                    int xx = x * MAP_PIXEL_RATIO;
+                    int yy = y * MAP_PIXEL_RATIO;
+                    cv::circle(map_display, cv::Point(xx + current_location.x, yy + current_location.y), 1, cv::Scalar(255, 0, 0), -1, cv::FILLED);
+
+                    // for lidar 
+                    xx = x * LIDAR_PIXEL_RATIO;
+                    yy = y * LIDAR_PIXEL_RATIO;
+                    cv::circle(lidar_display, cv::Point(xx + center.x, yy + center.y), -1, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                    cv::line(lidar_display, cv::Point(center.x, center.y), cv::Point(xx + center.x, yy + center.y), cv::Scalar(100, 100, 100), 1, cv::LINE_AA);
+                }
+            }
+        }
+
+        cv::flip(map_display, map_display, 1);
+
+        // display
+        cv::imshow("LIDAR", lidar_display);
+        cv::imshow("Map", map_display);
+
+        if ( is_use_camera ) {
+            cv::Mat current_frame = m_dog_status->getCurrentFrame();
+            if (current_frame.empty()) continue;
+            cv::imshow("Frame", current_frame);
+        }
+        int key = cv::waitKey(1);
+        if (key == 27) {
+            m_dog_status->setSystemStatus(false);
+            break;
         }
     }
 
@@ -137,6 +195,12 @@ void System::cameraCaptureThread(std::string input_path, std::shared_ptr<DogStat
 }
 
 void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogStatus> dog_status) {
+    // for icp algorithm
+    std::vector<cv::Point2f> prev_scan_data;
+    std::vector<cv::Point2f> curr_scan_data;
+    cv::Point2f current_location = cv::Point2f(500, 500);
+    bool is_ready = false;
+
     while (1) {
         if (!dog_status->getSystemStatus()) {
             printf("[SYSTEM] Exit Odometry Thread\n");
@@ -148,6 +212,74 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
         count = lidar->grabScanedLidarData(nodes, count);
         std::vector<sl_lidar_response_measurement_node_hq_t> current_scan_data(std::begin(nodes), std::end(nodes));
         dog_status->setScanData(current_scan_data, count);
+        
+        int t=0;
+        if ( !is_ready ) {
+            prev_scan_data.clear();
+            for (int i=0; i<current_scan_data.size(); i++) {
+                float theta = current_scan_data[i].angle_z_q14 * 90.f / 16384.f; 
+                float object_distance = current_scan_data[i].dist_mm_q2 / 4.0f;
+                cv::Point2f point;
+                point.x = object_distance * cos(theta * (CV_PI/180)) + 500;
+                point.y = object_distance * sin(theta * (CV_PI/180)) + 500;
+                prev_scan_data.push_back( point );
+            }
+            is_ready = true;
+            continue;
+        } 
+
+        else {
+            // for odometry
+            pcl::PointCloud<pcl::PointXYZ>::Ptr current_scan_point_cloud (new pcl::PointCloud<pcl::PointXYZ>(current_scan_data.size(),1)); 
+            pcl::PointCloud<pcl::PointXYZ>::Ptr prev_scan_point_cloud (new pcl::PointCloud<pcl::PointXYZ>(prev_scan_data.size(),1));
+
+            curr_scan_data.clear();
+            for (int i=0; i<current_scan_data.size(); i++) {
+                float theta = current_scan_data[i].angle_z_q14 * 90.f / 16384.f; 
+                float object_distance = current_scan_data[i].dist_mm_q2 / 4.0f;
+                cv::Point2f point;
+                point.x = object_distance * cos(theta * (CV_PI/180)) + 500;
+                point.y = object_distance * sin(theta * (CV_PI/180)) + 500;
+                curr_scan_data.push_back( point );
+            }
+
+            int i = 0;
+
+            for (auto& point : *current_scan_point_cloud) {
+                point.x = curr_scan_data[i].x;
+                point.y = curr_scan_data[i].y;
+                point.z = 0.0f; // for 2D 
+                i++;
+            }
+            
+            i = 0;
+            for (auto& point : *prev_scan_point_cloud) {
+                point.x = prev_scan_data[i].x;
+                point.y = prev_scan_data[i].y;
+                point.z = 0.0f; // for 2D 
+                i++;
+            }
+
+            // icp algorithm
+            pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+            icp.setInputSource(prev_scan_point_cloud);
+            icp.setInputTarget(current_scan_point_cloud);
+            pcl::PointCloud<pcl::PointXYZ> final;
+            icp.align(final);
+            Eigen::Matrix4f transformation_matrix = icp.getFinalTransformation();
+            
+            // for debug 
+            std::cout << "transformation_matrix = " << transformation_matrix << std::endl; 
+            current_location.x = current_location.x * transformation_matrix(0, 0) + current_location.y * transformation_matrix(0, 1) + transformation_matrix(0, 3);
+            current_location.y = current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) + transformation_matrix(1, 3);
+
+            dog_status->setCurrentLocation(current_location);
+
+            prev_scan_data.clear();
+            for (int i=0; i<curr_scan_data.size(); i++) {
+                prev_scan_data.push_back( curr_scan_data[i] );
+            }
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -161,8 +293,6 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
     bool is_safe_right = true;
     
     // const float object_collision_distance_threshold = 600;
-    const float LIDAR_MAX_DISTANCE = 1500;
-    const float COLLISION_DISTANCE_THRESHOLD = 350;
 
     while (1) {
         if (!dog_status->getSystemStatus()) {
