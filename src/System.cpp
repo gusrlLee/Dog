@@ -264,6 +264,7 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
             icp.setInputSource(prev_scan_point_cloud);
             icp.setInputTarget(current_scan_point_cloud);
+            icp.setMaximumIterations( 13 );
             pcl::PointCloud<pcl::PointXYZ> final;
             icp.align(final);
             Eigen::Matrix4f transformation_matrix = icp.getFinalTransformation();
