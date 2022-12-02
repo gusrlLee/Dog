@@ -233,8 +233,8 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
                     float x=0;
                     float y=0;
                     cv::Point2f point;
-                    x = object_distance * cos(theta * (CV_PI/180)) + 500;
-                    y = object_distance * sin(theta * (CV_PI/180)) + 500;
+                    x = (object_distance * cos(theta * (CV_PI/180))) + 500;
+                    y = (object_distance * sin(theta * (CV_PI/180))) + 500;
                     point.x = x * cos(rotate * (CV_PI/180)) - y * sin(rotate * (CV_PI/180));
                     point.y = x * sin(rotate * (CV_PI/180)) + y * cos(rotate * (CV_PI/180));
                     prev_scan_data.push_back( point );
@@ -246,8 +246,8 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
 
         else {
             // for odometry
-            pcl::PointCloud<pcl::PointXYZ>::Ptr current_scan_point_cloud (new pcl::PointCloud<pcl::PointXYZ>(current_scan_data.size(),1)); 
             pcl::PointCloud<pcl::PointXYZ>::Ptr prev_scan_point_cloud (new pcl::PointCloud<pcl::PointXYZ>(prev_scan_data.size(),1));
+            pcl::PointCloud<pcl::PointXYZ>::Ptr current_scan_point_cloud (new pcl::PointCloud<pcl::PointXYZ>(current_scan_data.size(),1)); 
 
             curr_scan_data.clear();
             for (int i=0; i<current_scan_data.size(); i++) {
@@ -255,8 +255,8 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
                 float object_distance = current_scan_data[i].dist_mm_q2 / 4.0f;
                 if (object_distance > 0) {
                     cv::Point2f point;
-                    float x = object_distance * cos(theta * (CV_PI/180)) + 500;
-                    float y = object_distance * sin(theta * (CV_PI/180)) + 500;
+                    float x = (object_distance * cos(theta * (CV_PI/180))) + 500;
+                    float y = (object_distance * sin(theta * (CV_PI/180))) + 500;
                     point.x = x * cos(rotate * (CV_PI/180)) - y * sin(rotate * (CV_PI/180));
                     point.y = x * sin(rotate * (CV_PI/180)) + y * cos(rotate * (CV_PI/180));
                     curr_scan_data.push_back( point );
@@ -264,7 +264,7 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             }
 
             int i = 0;
-
+            // current data 
             for (auto& point : *current_scan_point_cloud) {
                 point.x = curr_scan_data[i].x;
                 point.y = curr_scan_data[i].y;
@@ -273,6 +273,7 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             }
             
             i = 0;
+            // prev data 
             for (auto& point : *prev_scan_point_cloud) {
                 point.x = prev_scan_data[i].x;
                 point.y = prev_scan_data[i].y;
@@ -287,25 +288,29 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             icp.setInputTarget(current_scan_point_cloud);
             pcl::PointCloud<pcl::PointXYZ> final;
             icp.align(final);
-            icp.setMaximumIterations (1);
             Eigen::Matrix4f transformation_matrix = icp.getFinalTransformation();
             
             // for debug 
-            // std::cout << "transformation_matrix = " << transformation_matrix << std::endl; 
-            current_location.x = current_location.x * transformation_matrix(0, 0) + current_location.y * transformation_matrix(0, 1) + transformation_matrix(0, 3);
-            current_location.y = current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) + transformation_matrix(1, 3);
+            std::cout << "=======================================================================" << std::endl;
+            std::cout << transformation_matrix << std::endl;
+            cv::Point2f new_current_location; 
+            new_current_location.x = current_location.x * transformation_matrix(0, 0) + 0.01 * current_location.y * transformation_matrix(0, 1) + 0.01 * transformation_matrix(0, 3);
+            new_current_location.y = 0.01 * current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) + 0.01 * transformation_matrix(1, 3);
 
-            dog_status->setCurrentLocation(current_location);
+            dog_status->setCurrentLocation(new_current_location);
 
+            // for init 
             prev_scan_data.clear();
             for (int i=0; i<curr_scan_data.size(); i++) {
                 prev_scan_data.push_back( curr_scan_data[i] );
             }
+            current_location = new_current_location;
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
 }
+
 
 void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<DogStatus> dog_status) {
     char command;
