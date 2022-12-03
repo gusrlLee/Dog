@@ -103,7 +103,7 @@ void System::startProgram() {
 
         size_t count = current_scan_data.size();
 
-        cv::circle(map_display, cv::Point((int)current_location.x, (int)current_location.y), 5, (255, 0, 0), 5, cv::FILLED);
+        cv::circle(map_display, cv::Point((int)current_location.x, (int)current_location.y), 5, cv::Scalar(255, 0, 0), 5, cv::FILLED);
 
         for (int pos = 0; pos < (int)count; ++pos) {
             theta = current_scan_data[pos].angle_z_q14 * 90.f / 16384.f;
@@ -148,7 +148,7 @@ void System::startProgram() {
                 }
             }
         }
-        // cv::flip(map_display, map_display, 1);
+        cv::flip(map_display, map_display, 1);
 
 
         // display
@@ -291,11 +291,13 @@ void System::odometryThread(std::shared_ptr<Lidar> lidar, std::shared_ptr<DogSta
             Eigen::Matrix4f transformation_matrix = icp.getFinalTransformation();
             
             // for debug 
-            std::cout << "=======================================================================" << std::endl;
-            std::cout << transformation_matrix << std::endl;
+            // std::cout << "=======================================================================" << std::endl;
+            // std::cout << transformation_matrix << std::endl;
             cv::Point2f new_current_location; 
-            new_current_location.x = current_location.x * transformation_matrix(0, 0) + 0.01 * current_location.y * transformation_matrix(0, 1) + 0.01 * transformation_matrix(0, 3);
-            new_current_location.y = 0.01 * current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) + 0.01 * transformation_matrix(1, 3);
+            new_current_location.x = current_location.x * transformation_matrix(0, 0) + 0.08 * current_location.y * transformation_matrix(0, 1) + 0.08 * transformation_matrix(0, 3);
+            new_current_location.y = 0.08 * current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) - 0.08 * transformation_matrix(1, 3);
+            // new_current_location.x = current_location.x * transformation_matrix(0, 0) + current_location.y * transformation_matrix(0, 1) + transformation_matrix(0, 3);
+            // new_current_location.y = current_location.x * transformation_matrix(1, 0) + current_location.y * transformation_matrix(1, 1) - transformation_matrix(1, 3);
 
             dog_status->setCurrentLocation(new_current_location);
 
@@ -319,7 +321,7 @@ void System::controlThread(std::shared_ptr<Control> control, std::shared_ptr<Dog
     bool is_safe_left = true;
     bool is_safe_right = true;
     
-    const float object_collision_distance_threshold = 350;
+    const float object_collision_distance_threshold = 330;
 
     while (1) {
         if (!dog_status->getSystemStatus()) {
